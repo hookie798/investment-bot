@@ -1,12 +1,12 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
-investment-bot — Level 4 Automated Investment Decision System
-Stable Version (Fixed)
+investment-bot — Level 4 Automated Investment System (PushPlus Version)
 
-- Fix: None handling
-- Fix: missing fields safety
-- Fix: emoji encoding
-- Fix: safer data access
+Features:
+- Fetch NASDAQ proxy (QQQ)
+- Strategy evaluation
+- Portfolio state tracking
+- PushPlus WeChat notification
 """
 
 import json
@@ -19,6 +19,7 @@ from strategy import DCA_AMOUNT_RMB, evaluate
 from wechat import send_wechat_message
 
 
+# ── Portfolio state file ─────────────────────────────────────────────
 STATE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "portfolio_state.json"
@@ -27,10 +28,11 @@ STATE_FILE = os.path.join(
 DEFAULT_STATE = {
     "nasdaq_value_rmb": 50000.0,
     "bond_value_rmb": 30000.0,
-    "last_updated": "",
+    "last_updated": ""
 }
 
 
+# ── Load state ───────────────────────────────────────────────────────
 def load_portfolio():
     if os.path.exists(STATE_FILE):
         try:
@@ -40,41 +42,40 @@ def load_portfolio():
                 state.setdefault(k, v)
             return state
         except Exception:
-            print("[WARN] State file corrupted, using default.")
-    return dict(DEFAULT_STATE)
+            print("[WARN] corrupted state file, reset to default")
+    return DEFAULT_STATE.copy()
 
 
+# ── Save state ───────────────────────────────────────────────────────
 def save_portfolio(state):
     state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
-def run(dry_run: bool = False):
-    print("=" * 55)
+# ── Main run ─────────────────────────────────────────────────────────
+def run(dry_run=False):
+    print("=" * 60)
     print("📊 investment-bot — Daily Investment Signal")
-    print("=" * 55)
+    print("=" * 60)
 
-    # ── 1. market data ─────────────────────────
-    print("\n[1/4] Fetching NASDAQ market data ...")
+    # 1️⃣ Fetch market data
+    print("\n[1/4] Fetching NASDAQ data ...")
     nasdaq = fetch_nasdaq_data()
 
     if not nasdaq:
-        msg = "❌ Failed to fetch NASDAQ data. Aborting."
+        msg = "❌ Failed to fetch NASDAQ data"
         print(msg)
         if not dry_run:
-            send_wechat_message(msg)
+            TOKEN = os.getenv("PUSHPLUS_TOKEN")
+            send_wechat_message(msg, TOKEN)
         return 1
 
-    print(
-        f"      Price: {nasdaq.get('current_price', 0):,.2f} | "
-        f"DD: {nasdaq.get('drawdown_pct', 0)}% | "
-        f"YTD: {nasdaq.get('ytd_return_pct', 0)}%"
-    )
+    print(f"      Price: {nasdaq['current_price']} | DD: {nasdaq['drawdown_pct']}% | YTD: {nasdaq['ytd_return_pct']}%")
 
-    bond = fetch_bond_data() or {"current_price": 0}
+    bond = fetch_bond_data()
 
-    # ── 2. portfolio ─────────────────────────
+    # 2️⃣ Load portfolio
     print("\n[2/4] Loading portfolio state ...")
     portfolio = load_portfolio()
 
@@ -83,45 +84,45 @@ def run(dry_run: bool = False):
 
     print(f"      NASDAQ: ¥{nasdaq_val:,.0f} | Bonds: ¥{bond_val:,.0f}")
 
-    # ── 3. strategy ─────────────────────────
-    print("\n[3/4] Evaluating investment decision ...")
+    # 3️⃣ Strategy
+    print("\n[3/4] Evaluating strategy ...")
 
     decision = evaluate(
-        nasdaq_price=nasdaq.get("current_price", 0),
-        nasdaq_drawdown_pct=nasdaq.get("drawdown_pct", 0),
+        nasdaq_price=nasdaq["current_price"],
+        nasdaq_drawdown_pct=nasdaq["drawdown_pct"],
         nasdaq_current_value=nasdaq_val,
         bond_current_value=bond_val,
-        ytd_return_pct=nasdaq.get("ytd_return_pct", 0),
+        ytd_return_pct=nasdaq.get("ytd_return_pct"),
         extra={
-            "ath_price": nasdaq.get("ath_price", 0),
-            "ath_date": nasdaq.get("ath_date", ""),
-            "bond_price": bond.get("current_price", 0),
-        },
+            "ath_price": nasdaq["ath_price"],
+            "ath_date": nasdaq["ath_date"],
+            "bond_price": bond["current_price"] if bond else None,
+        }
     )
 
-    print(f"      Action: {decision.action} | DCA: ¥{DCA_AMOUNT_RMB}")
+    print(f"      Action: {decision.action} | DCA: ¥{decision.dca_amount_rmb}")
 
-    # ── 4. update portfolio ─────────────────────────
+    # 4️⃣ Update portfolio
     if not dry_run:
-        portfolio["nasdaq_value_rmb"] = round(
-            nasdaq_val + DCA_AMOUNT_RMB, 2
-        )
+        portfolio["nasdaq_value_rmb"] += DCA_AMOUNT_RMB
         save_portfolio(portfolio)
-
         print(f"      Updated NASDAQ: ¥{portfolio['nasdaq_value_rmb']:,.0f}")
 
-    # ── 5. push ─────────────────────────
+    # 5️⃣ Push notification
     print("\n[4/4] Sending signal ...")
 
+    TOKEN = os.getenv("PUSHPLUS_TOKEN")
+
     if not dry_run:
-        send_wechat_message(decision.message)
+        send_wechat_message(decision.message, TOKEN)
     else:
         print(decision.message)
 
-    print("\n✅ Done.\n")
+    print("\n✅ Done.")
     return 0
 
 
+# ── Entry ────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     dry = "--dry-run" in sys.argv
-    sys.exit(run(dry))
+    exit(run(dry))
