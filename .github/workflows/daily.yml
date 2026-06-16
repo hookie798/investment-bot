@@ -1,63 +1,39 @@
-name: investment-bot-daily
+name: Daily Investment Bot
 
 on:
   schedule:
-    # 北京时间 09:00（UTC 01:00）
-    - cron: "0 1 * * 1-5"
-
+    - cron: '0 1 * * 1-5'   # 每天 09:00 新加坡时间（UTC+8）
   workflow_dispatch:
-
-  push:
-    branches:
-      - main
-    paths:
-      - "**.py"
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write   # ✅ 修复你 403 push 权限问题（关键）
-
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
 
     steps:
-      # 1️⃣ 拉代码
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2️⃣ Python环境
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: '3.10'
 
-      # 3️⃣ 安装依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ 创建运行目录
-      - name: Prepare runtime folders
-        run: |
-          mkdir -p logs
-
-      # 5️⃣ 运行主程序
-      - name: Run investment bot
+      - name: Run bot
         run: |
           python main.py
 
-      # 6️⃣ 提交状态（已彻底修复 logs.txt bug）
-      - name: Commit state
+      - name: Commit state (optional)
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
-
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add portfolio_state.json logs || true
-
-          git commit -m "auto update portfolio state" || echo "no changes"
-
-          git push || echo "no changes to push"
+          git commit -m "update portfolio state" || true
+          git push || true
