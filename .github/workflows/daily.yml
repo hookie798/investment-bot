@@ -2,7 +2,7 @@ name: investment-bot-daily
 
 on:
   schedule:
-    # 北京时间 09:00 = UTC 01:00
+    # 北京时间 09:00（UTC 01:00）
     - cron: "0 1 * * 1-5"
 
   workflow_dispatch:
@@ -17,6 +17,9 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write   # ✅ 修复你 403 push 权限问题（关键）
+
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -26,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
 
       # 2️⃣ Python环境
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
@@ -37,8 +40,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ 创建运行目录（防止日志错误）
-      - name: Prepare runtime
+      # 4️⃣ 创建运行目录
+      - name: Prepare runtime folders
         run: |
           mkdir -p logs
 
@@ -47,13 +50,13 @@ jobs:
         run: |
           python main.py
 
-      # 6️⃣ 提交状态文件（可选持久化）
+      # 6️⃣ 提交状态（已彻底修复 logs.txt bug）
       - name: Commit state
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
 
-          git add portfolio_state.json logs.txt || true
+          git add portfolio_state.json logs || true
 
           git commit -m "auto update portfolio state" || echo "no changes"
 
