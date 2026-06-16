@@ -1,11 +1,11 @@
-name: investment-bot-daily-run
+name: investment-bot-daily
 
 on:
   schedule:
-    # 🕐 UTC时间 = 北京时间 09:00（工作日）
+    # 北京时间 09:00 = UTC 01:00
     - cron: "0 1 * * 1-5"
 
-  workflow_dispatch:   # 手动触发按钮
+  workflow_dispatch:
 
   push:
     branches:
@@ -17,16 +17,19 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
-      # 1️⃣ 拉取代码
+      # 1️⃣ 拉代码
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ 设置 Python
-      - name: Set up Python
+      # 2️⃣ Python环境
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14.5"
+          python-version: "3.10"
 
       # 3️⃣ 安装依赖
       - name: Install dependencies
@@ -34,24 +37,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ 创建 logs 目录（防止写文件报错）
-      - name: Prepare runtime folders
+      # 4️⃣ 创建运行目录（防止日志错误）
+      - name: Prepare runtime
         run: |
           mkdir -p logs
 
-      # 5️⃣ 运行投资系统（核心）
+      # 5️⃣ 运行主程序
       - name: Run investment bot
         run: |
           python main.py
 
-      # 6️⃣ 保存 portfolio 状态（可选但推荐）
-      - name: Commit portfolio state
+      # 6️⃣ 提交状态文件（可选持久化）
+      - name: Commit state
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
 
-          git add portfolio_state.json logs || true
+          git add portfolio_state.json logs.txt || true
 
-          git commit -m "chore: update portfolio state" || echo "No changes"
+          git commit -m "auto update portfolio state" || echo "no changes"
 
-          git push || echo "No changes to push"
+          git push || echo "no changes to push"
